@@ -1,4 +1,6 @@
-"""Neural network modules built on the scalar autograd engine."""
+"""Neural network modules built on the autograd engine."""
+
+from __future__ import annotations
 
 import random
 
@@ -6,9 +8,9 @@ from autograd import Value
 
 
 class Neuron:
-    """Single neuron: activation(sum(w_i * x_i) + b)."""
+    """Single neuron with weights, bias, and activation."""
 
-    def __init__(self, nin: int, activation: str = "relu"):
+    def __init__(self, nin: int, activation: str = "relu") -> None:
         self.w = [Value(random.uniform(-1, 1)) for _ in range(nin)]
         self.b = Value(0.0)
         self.activation = activation
@@ -19,8 +21,10 @@ class Neuron:
             return act.relu()
         elif self.activation == "tanh":
             return act.tanh()
-        else:
+        elif self.activation == "linear":
             return act
+        else:
+            raise ValueError(f"Unknown activation: {self.activation}")
 
     def parameters(self) -> list[Value]:
         return self.w + [self.b]
@@ -29,8 +33,10 @@ class Neuron:
 class Layer:
     """Layer of neurons."""
 
-    def __init__(self, nin: int, nout: int, activation: str = "relu"):
-        self.neurons = [Neuron(nin, activation) for _ in range(nout)]
+    def __init__(
+        self, nin: int, nout: int, activation: str = "relu"
+    ) -> None:
+        self.neurons = [Neuron(nin, activation=activation) for _ in range(nout)]
 
     def __call__(self, x: list[Value]) -> list[Value]:
         return [n(x) for n in self.neurons]
@@ -40,17 +46,17 @@ class Layer:
 
 
 class MLP:
-    """Multi-layer perceptron. Last layer uses no activation (linear)."""
+    """Multi-layer perceptron. Last layer uses no activation."""
 
-    def __init__(self, nin: int, nouts: list[int]):
-        sz = [nin] + nouts
+    def __init__(self, nin: int, nouts: list[int]) -> None:
+        sizes = [nin] + nouts
         self.layers = []
         for i in range(len(nouts)):
-            act = "tanh" if i < len(nouts) - 1 else "linear"
-            self.layers.append(Layer(sz[i], sz[i + 1], act))
+            act = "relu" if i < len(nouts) - 1 else "linear"
+            self.layers.append(Layer(sizes[i], sizes[i + 1], activation=act))
 
     def __call__(self, x: list[float]) -> list[Value]:
-        out = [Value(xi) if not isinstance(xi, Value) else xi for xi in x]
+        out: list[Value] = [Value(xi) for xi in x]
         for layer in self.layers:
             out = layer(out)
         return out
