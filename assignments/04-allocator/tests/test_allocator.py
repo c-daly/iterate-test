@@ -171,3 +171,123 @@ class TestAllocatorBase:
         """Allocator is abstract and cannot be instantiated directly."""
         with pytest.raises(TypeError):
             Allocator(1024)
+
+
+from firstfit import FirstFitAllocator
+
+
+class TestFirstFitAllocBasic:
+    def test_ff_single_alloc(self):
+        """alloc(100) from 1024 pool returns offset 0."""
+        a = FirstFitAllocator(1024)
+        assert a.alloc(100) == 0
+
+    def test_ff_multiple_allocs(self):
+        """Three allocs: 100, 200, 50 -> offsets 0, 100, 300."""
+        a = FirstFitAllocator(1024)
+        o1 = a.alloc(100)
+        o2 = a.alloc(200)
+        o3 = a.alloc(50)
+        assert o1 == 0
+        assert o2 == 100
+        assert o3 == 300
+
+
+class TestFirstFitFreeAndReuse:
+    def test_ff_free_and_reuse(self):
+        """alloc(100), free(0), alloc(100) -> offset 0 again."""
+        a = FirstFitAllocator(1024)
+        o1 = a.alloc(100)
+        a.free(o1)
+        o2 = a.alloc(100)
+        assert o2 == 0
+
+    def test_ff_coalesce(self):
+        """alloc A(100), alloc B(100), free A, free B -> single free block."""
+        a = FirstFitAllocator(1024)
+        o1 = a.alloc(100)
+        o2 = a.alloc(100)
+        a.free(o1)
+        a.free(o2)
+        s = a.stats()
+        assert s.num_free_blocks == 1
+        assert s.free == 1024
+
+    def test_ff_split_min_size(self):
+        """Alloc leaves < 16 remainder -> no split (absorbed into alloc)."""
+        a = FirstFitAllocator(1024)
+        o = a.alloc(1010)
+        assert o == 0
+        s = a.stats()
+        assert s.num_free_blocks == 0
+        assert s.num_allocations == 1
+
+    def test_ff_first_fit_behavior(self):
+        """alloc A(100), alloc B(100), free A, alloc C(50) -> C gets offset 0."""
+        a = FirstFitAllocator(1024)
+        o_a = a.alloc(100)
+        _o_b = a.alloc(100)
+        a.free(o_a)
+        o_c = a.alloc(50)
+        assert o_c == 0
+
+
+class TestFirstFitErrors:
+    def test_ff_alloc_failure(self):
+        """Fill pool, next alloc raises AllocationError."""
+        a = FirstFitAllocator(256)
+        a.alloc(256)
+        with pytest.raises(AllocationError):
+            a.alloc(1)
+
+    def test_ff_double_free(self):
+        """Freeing the same offset twice raises AllocationError."""
+        a = FirstFitAllocator(1024)
+        o = a.alloc(100)
+        a.free(o)
+        with pytest.raises(AllocationError):
+            a.free(o)
+
+    def test_ff_invalid_free(self):
+        """Freeing an offset that was never allocated raises AllocationError."""
+        a = FirstFitAllocator(1024)
+        with pytest.raises(AllocationError):
+            a.free(999)
+
+
+class TestFirstFitStats:
+    def test_ff_fragmentation(self):
+        """Create gaps, verify fragmentation > 0."""
+        a = FirstFitAllocator(1024)
+        o_a = a.alloc(100)
+        _o_b = a.alloc(100)
+        _o_c = a.alloc(100)
+        a.free(o_a)
+        s = a.stats()
+        assert s.fragmentation > 0
+
+
+class TestFirstFitStress:
+    def test_ff_stress(self):
+        """200 random alloc/free ops, no crashes."""
+        a = FirstFitAllocator(8192)
+        rng = random.Random(42)
+        live = []
+
+        for _ in range(200):
+            if not live or rng.random() < 0.6:
+                size = rng.randint(1, 512)
+                try:
+                    offset = a.alloc(size)
+                    live.append(offset)
+                except AllocationError:
+                    pass
+            else:
+                idx = rng.randint(0, len(live) - 1)
+                offset = live.pop(idx)
+                a.free(offset)
+
+        s = a.stats()
+        assert s.total_size == 8192
+        assert s.num_allocations == len(live)
+        assert 0.0 <= s.fragmentation <= 1.0
