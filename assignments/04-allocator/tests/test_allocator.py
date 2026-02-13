@@ -5,6 +5,7 @@ import pytest
 
 from allocator import Allocator, AllocationError, AllocatorStats
 from buddy import BuddyAllocator
+from compare import run_workload, compare
 
 
 class TestBuddyAllocator:
@@ -291,3 +292,63 @@ class TestFirstFitStress:
         assert s.total_size == 8192
         assert s.num_allocations == len(live)
         assert 0.0 <= s.fragmentation <= 1.0
+
+
+class TestCompare:
+    def test_run_workload(self):
+        """run_workload executes alloc+free sequence and returns stats."""
+        ba = BuddyAllocator(1024)
+        ops = [
+            ("alloc", 64),
+            ("alloc", 128),
+            ("free", 0),  # free the first alloc (64 bytes)
+        ]
+        stats = run_workload(ba, ops)
+        assert isinstance(stats, AllocatorStats)
+        assert stats.total_size == 1024
+        assert stats.num_allocations == 1  # one alloc freed, one remains
+        assert stats.allocated == 128
+
+    def test_compare_returns_both(self):
+        """compare() returns dict with buddy and firstfit keys, both AllocatorStats."""
+        ops = [("alloc", 64), ("alloc", 128)]
+        result = compare(1024, ops)
+        assert "buddy" in result
+        assert "firstfit" in result
+        assert isinstance(result["buddy"], AllocatorStats)
+        assert isinstance(result["firstfit"], AllocatorStats)
+
+    def test_compare_mixed_workload(self):
+        """10 allocs and 5 frees produce valid stats from both allocators."""
+        ops = [("alloc", 32 + i * 4) for i in range(10)]
+        # free allocs at indices 1, 3, 5, 7, 9
+        ops += [("free", i) for i in range(1, 10, 2)]
+        result = compare(4096, ops)
+        for key in ("buddy", "firstfit"):
+            s = result[key]
+            assert s.total_size == 4096
+            assert s.num_allocations == 5  # 10 allocs - 5 frees
+            assert s.allocated > 0
+            assert s.free > 0
+            assert 0.0 <= s.fragmentation <= 1.0
+
+    def test_compare_fragmentation_difference(self):
+        """Buddy rounds up to power-of-2; firstfit packs exactly -> different allocated."""
+        # Allocate sizes that are NOT powers of 2 so buddy wastes space
+        ops = [
+            ("alloc", 33),   # buddy rounds to 64, firstfit uses 33
+            ("alloc", 65),   # buddy rounds to 128, firstfit uses 65
+            ("alloc", 100),  # buddy rounds to 128, firstfit uses 100
+        ]
+        result = compare(1024, ops)
+        buddy_stats = result["buddy"]
+        ff_stats = result["firstfit"]
+        # Buddy allocates more total memory due to rounding
+        assert buddy_stats.allocated > ff_stats.allocated
+        # Both should have 3 active allocations
+        assert buddy_stats.num_allocations == 3
+        assert ff_stats.num_allocations == 3
+        # Buddy: 64+128+128 = 320 allocated
+        assert buddy_stats.allocated == 320
+        # FirstFit: 33+65+100 = 198 allocated
+        assert ff_stats.allocated == 198
