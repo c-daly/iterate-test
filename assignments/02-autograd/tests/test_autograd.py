@@ -1,6 +1,8 @@
 import math
+import random
 import pytest
 from autograd import Value
+from nn import Neuron, Layer, MLP
 
 
 def test_add():
@@ -198,3 +200,76 @@ def test_repeated_backward():
     c.backward()
     assert a.grad == pytest.approx(6.0)
     assert b.grad == pytest.approx(4.0)
+
+
+
+# --- Neural Network Tests ---
+
+def test_neuron_forward():
+    random.seed(42)
+    n = Neuron(3)
+    x = [Value(1.0), Value(2.0), Value(3.0)]
+    out = n(x)
+    assert isinstance(out, Value)
+
+
+def test_neuron_parameters():
+    n = Neuron(3)
+    assert len(n.parameters()) == 4  # 3 weights + 1 bias
+
+
+def test_layer_forward():
+    random.seed(42)
+    layer = Layer(3, 4)
+    x = [Value(1.0), Value(2.0), Value(3.0)]
+    out = layer(x)
+    assert len(out) == 4
+    assert all(isinstance(v, Value) for v in out)
+
+
+def test_layer_parameters():
+    layer = Layer(3, 4)
+    assert len(layer.parameters()) == 4 * (3 + 1)  # 4 neurons * (3 weights + 1 bias)
+
+
+def test_mlp_forward():
+    random.seed(42)
+    mlp = MLP(3, [4, 4, 1])
+    out = mlp([1.0, 2.0, 3.0])
+    assert len(out) == 1
+    assert isinstance(out[0], Value)
+
+
+def test_mlp_parameters():
+    mlp = MLP(3, [4, 4, 1])
+    params = mlp.parameters()
+    expected = 4*(3+1) + 4*(4+1) + 1*(4+1)  # 16 + 20 + 5 = 41
+    assert len(params) == expected
+
+
+def test_xor_learning():
+    random.seed(3)
+    mlp = MLP(2, [4, 1])
+    xs = [[0,0],[0,1],[1,0],[1,1]]
+    ys = [0, 1, 1, 0]
+
+    for step in range(100):
+        # Forward
+        preds = [mlp(x)[0] for x in xs]
+        loss = sum((p - y)**2 for p, y in zip(preds, ys))
+
+        # Zero grad
+        for p in mlp.parameters():
+            p.grad = 0.0
+
+        # Backward
+        loss.backward()
+
+        # Update
+        for p in mlp.parameters():
+            p.data -= 0.05 * p.grad
+
+    # Final loss should be small
+    preds = [mlp(x)[0] for x in xs]
+    final_loss = sum((p.data - y)**2 for p, y in zip(preds, ys))
+    assert final_loss < 0.1

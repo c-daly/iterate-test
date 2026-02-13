@@ -1,0 +1,51 @@
+import random
+from autograd import Value
+
+
+class Neuron:
+    def __init__(self, nin: int, activation: str = 'relu'):
+        self.w = [Value(random.uniform(-1, 1), label=f'w{i}') for i in range(nin)]
+        self.b = Value(0.0, label='b')
+        self.activation = activation
+
+    def __call__(self, x: list[Value]) -> Value:
+        act = sum((wi * xi for wi, xi in zip(self.w, x)), self.b)
+        if self.activation == 'relu':
+            return act.relu()
+        elif self.activation == 'tanh':
+            return act.tanh()
+        elif self.activation == 'linear' or self.activation is None:
+            return act
+        raise ValueError(f'Unknown activation: {self.activation}')
+
+    def parameters(self) -> list[Value]:
+        return self.w + [self.b]
+
+
+class Layer:
+    def __init__(self, nin: int, nout: int, activation: str = 'relu'):
+        self.neurons = [Neuron(nin, activation) for _ in range(nout)]
+
+    def __call__(self, x: list[Value]) -> list[Value]:
+        return [n(x) for n in self.neurons]
+
+    def parameters(self) -> list[Value]:
+        return [p for n in self.neurons for p in n.parameters()]
+
+
+class MLP:
+    def __init__(self, nin: int, nouts: list[int]):
+        sz = [nin] + nouts
+        self.layers = []
+        for i in range(len(nouts)):
+            act = 'relu' if i < len(nouts) - 1 else 'linear'
+            self.layers.append(Layer(sz[i], sz[i + 1], act))
+
+    def __call__(self, x: list[float]) -> list[Value]:
+        out = [Value(xi) for xi in x]
+        for layer in self.layers:
+            out = layer(out)
+        return out
+
+    def parameters(self) -> list[Value]:
+        return [p for layer in self.layers for p in layer.parameters()]
