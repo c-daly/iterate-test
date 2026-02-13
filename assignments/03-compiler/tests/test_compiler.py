@@ -212,3 +212,169 @@ class TestParseError:
     def test_parse_error(self):
         with pytest.raises(ParseError):
             _parse("let x = 42")
+
+
+# --- Integration Tests (Compiler + VM) ---
+
+from lang import execute
+from vm import VMError
+
+
+class TestArithmeticExpressions:
+    def test_arithmetic_expressions(self):
+        assert execute("print 2 + 3 * 4;") == ["14"]
+
+
+class TestOperatorPrecedence:
+    def test_operator_precedence(self):
+        assert execute("print 2 * 3 + 4;") == ["10"]
+
+
+class TestParentheses:
+    def test_parentheses(self):
+        assert execute("print (2 + 3) * 4;") == ["20"]
+
+
+class TestVariables:
+    def test_variables(self):
+        assert execute("let x = 10; let y = 20; print x + y;") == ["30"]
+
+
+class TestVariableReassignment:
+    def test_variable_reassignment(self):
+        assert execute("let x = 1; x = 2; print x;") == ["2"]
+
+
+class TestIfTrue:
+    def test_if_true(self):
+        assert execute("if true { print 1; }") == ["1"]
+
+
+class TestIfFalse:
+    def test_if_false(self):
+        assert execute("if false { print 1; } else { print 2; }") == ["2"]
+
+
+class TestWhileLoop:
+    def test_while_loop(self):
+        source = """
+            let i = 1;
+            while i <= 5 {
+                print i;
+                i = i + 1;
+            }
+        """
+        assert execute(source) == ["1", "2", "3", "4", "5"]
+
+
+class TestFunctionBasic:
+    def test_function_basic(self):
+        assert execute("fn add(a, b) { return a + b; } print add(3, 4);") == ["7"]
+
+
+class TestRecursionFactorial:
+    def test_recursion_factorial(self):
+        source = """
+            fn factorial(n) {
+                if n <= 1 { return 1; }
+                return n * factorial(n - 1);
+            }
+            print factorial(5);
+        """
+        assert execute(source) == ["120"]
+
+
+class TestRecursionFibonacci:
+    def test_recursion_fibonacci(self):
+        source = """
+            fn fib(n) {
+                if n <= 1 { return n; }
+                return fib(n - 1) + fib(n - 2);
+            }
+            print fib(10);
+        """
+        assert execute(source) == ["55"]
+
+
+class TestStringConcat:
+    def test_string_concat(self):
+        assert execute("print \"hello\" + \" world\";") == ["hello world"]
+
+
+class TestBooleanLogic:
+    def test_boolean_logic(self):
+        assert execute("print true and false;") == ["false"]
+        assert execute("print true or false;") == ["true"]
+        assert execute("print not true;") == ["false"]
+        assert execute("print not false;") == ["true"]
+
+
+class TestComparisonOps:
+    def test_comparison_ops(self):
+        assert execute("print 1 == 1;") == ["true"]
+        assert execute("print 1 != 2;") == ["true"]
+        assert execute("print 1 < 2;") == ["true"]
+        assert execute("print 2 > 1;") == ["true"]
+        assert execute("print 1 <= 1;") == ["true"]
+        assert execute("print 2 >= 1;") == ["true"]
+
+
+class TestUndefinedVariable:
+    def test_undefined_variable(self):
+        with pytest.raises(VMError):
+            execute("print x;")
+
+
+class TestDivisionByZero:
+    def test_division_by_zero(self):
+        with pytest.raises(VMError):
+            execute("print 1 / 0;")
+
+
+class TestModulo:
+    def test_modulo(self):
+        assert execute("print 10 % 3;") == ["1"]
+
+
+class TestUnaryNeg:
+    def test_unary_neg(self):
+        assert execute("print -5;") == ["-5"]
+
+
+class TestNestedFunctionScope:
+    def test_nested_function_scope(self):
+        source = """
+            let x = 10;
+            fn add_x(n) { return n + x; }
+            print add_x(5);
+        """
+        assert execute(source) == ["15"]
+
+
+class TestFizzBuzz:
+    def test_fizzbuzz(self):
+        source = """
+            let i = 1;
+            while i <= 15 {
+                if i % 15 == 0 {
+                    print "FizzBuzz";
+                } else {
+                    if i % 3 == 0 {
+                        print "Fizz";
+                    } else {
+                        if i % 5 == 0 {
+                            print "Buzz";
+                        } else {
+                            print i;
+                        }
+                    }
+                }
+                i = i + 1;
+            }
+        """
+        expected = [
+            "1", "2", "Fizz", "4", "Buzz",
+            "Fizz", "7", "8", "Fizz", "Buzz",
+            "11", "Fizz", "13", "14", "FizzBuzz",
+        ]
+        assert execute(source) == expected
