@@ -7,7 +7,7 @@ released range is coalesced with adjacent (left and right) free neighbours.
 """
 from __future__ import annotations
 
-from bisect import insort
+from bisect import bisect_left
 
 from .allocator import AllocationError, Allocator, AllocatorStats
 
@@ -41,7 +41,9 @@ class FirstFitAllocator(Allocator):
                 # Pop the block; we will re-insert the remainder if any.
                 self._free.pop(i)
                 if remainder >= _SPLIT_THRESHOLD:
-                    insort(self._free, (off + size, remainder))
+                    # Remainder slots in immediately after the popped block,
+                    # at the same index (offsets strictly increase in _free).
+                    self._free.insert(i, (off + size, remainder))
                 # Always record the *requested* size so stats.allocated reflects
                 # what the caller asked for, not the (possibly absorbed) block.
                 # The true block size is recovered on free() from neighbours.
@@ -113,12 +115,16 @@ class FirstFitAllocator(Allocator):
         return min(next_free, next_live) - offset
 
     def _insert_and_coalesce(self, offset: int, size: int) -> None:
-        """Insert a freed range and merge with any adjacent free neighbours."""
-        insort(self._free, (offset, size))
-        # Find our index after insertion (first match by offset).
-        idx = next(i for i, (o, _) in enumerate(self._free) if o == offset)
+        """Insert a freed range and merge with any adjacent free neighbours.
 
-        # Try to merge with right neighbour first.
+        Uses ``bisect_left`` to locate the insertion point in one O(log N)
+        pass and reuses that index for neighbour lookup, avoiding the
+        previous ``insort`` + linear ``next()`` re-scan.
+        """
+        idx = bisect_left(self._free, (offset, size))
+        self._free.insert(idx, (offset, size))
+
+        # Try to merge with right neighbour first (now at idx + 1).
         if idx + 1 < len(self._free):
             r_off, r_sz = self._free[idx + 1]
             if offset + size == r_off:
