@@ -14,12 +14,18 @@ from typing import Any, Iterator, Optional
 
 __all__ = ["SkipList"]
 
+# Sentinel marking the header node. Using a unique object guarantees that no
+# real integer key (e.g. -1) can ever collide with the header during equality
+# checks. The header.key is never compared during traversal, but the sentinel
+# documents intent and prevents accidental misuse.
+_HEADER: Any = object()
+
 
 class _Node:
     __slots__ = ("key", "value", "forward")
 
-    def __init__(self, key: int, value: Any, level: int) -> None:
-        self.key: int = key
+    def __init__(self, key: Any, value: Any, level: int) -> None:
+        self.key: Any = key
         self.value: Any = value
         self.forward: list[Optional[_Node]] = [None] * level
 
@@ -34,7 +40,7 @@ class SkipList:
             raise ValueError("p must be in [0.0, 1.0]")
         self.max_level: int = max_level
         self.p: float = p
-        self._header: _Node = _Node(key=-1, value=None, level=max_level)
+        self._header: _Node = _Node(key=_HEADER, value=None, level=max_level)
         self._level: int = 1
         self._size: int = 0
         self._rng: random.Random = random.Random()
@@ -64,8 +70,9 @@ class SkipList:
             return
         new_level = self._random_level()
         if new_level > self._level:
-            for i in range(self._level, new_level):
-                update[i] = self._header
+            # update[i] is already self._header for i >= self._level because
+            # _find_predecessors initialises every slot up to max_level with
+            # the header sentinel; no extra initialisation is required here.
             self._level = new_level
         node = _Node(key=key, value=value, level=new_level)
         for i in range(new_level):
