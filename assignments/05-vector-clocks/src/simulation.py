@@ -11,14 +11,14 @@ from .node import Message, Node
 class Simulation:
     """Coordinates message passing between named Nodes for a shared EventLog."""
 
-    def __init__(self, node_ids: list) -> None:
+    def __init__(self, node_ids: list[str]) -> None:
         self.event_log = EventLog()
         n = len(node_ids)
-        self.nodes = {
+        self.nodes: dict[str, Node] = {
             nid: Node(nid, n, self.event_log) for nid in node_ids
         }
         # FIFO message queues, one per recipient. deque pops in O(1).
-        self.inboxes: dict = {nid: deque() for nid in node_ids}
+        self.inboxes: dict[str, deque[Message]] = {nid: deque() for nid in node_ids}
 
     def local_event(self, node_id: str, data: Any = None) -> Event:
         """Run a local event on node_id."""
@@ -43,6 +43,6 @@ class Simulation:
         """Return the shared EventLog."""
         return self.event_log
 
-    def get_history(self) -> list:
+    def get_history(self) -> list[Event]:
         """Return events in causal order (alias for log.causal_order())."""
         return self.event_log.causal_order()

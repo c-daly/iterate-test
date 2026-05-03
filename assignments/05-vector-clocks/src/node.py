@@ -13,7 +13,7 @@ from .vector_clock import VectorClock
 class Message:
     """In-flight message between two nodes.
 
-    Carries the sender's vector clock so the receiver can merge.
+    Carries the senders vector clock so the receiver can merge.
     """
 
     sender: str
@@ -40,7 +40,7 @@ class Node:
         self.event_log.record(ev)
         return ev
 
-    def send(self, data: Any = None) -> tuple:
+    def send(self, data: Any = None) -> tuple[Event, Message]:
         """Record a send event and return (event, message_to_dispatch)."""
         self.clock = self.clock.increment()
         snapshot = self.clock  # immutable; safe to share with the message
