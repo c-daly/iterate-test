@@ -32,7 +32,13 @@ class SkipList:
         Promotion probability per layer (geometric distribution parameter).
     """
 
-    def __init__(self, max_level: int = 16, p: float = 0.5) -> None:
+    def __init__(
+        self,
+        max_level: int = 16,
+        p: float = 0.5,
+        seed: int | None = None,
+        rng: random.Random | None = None,
+    ) -> None:
         if max_level < 1:
             raise ValueError("max_level must be >= 1")
         if not (0.0 < p < 1.0):
@@ -43,7 +49,12 @@ class SkipList:
         self._head: _Node = _Node(key=0, value=None, level=max_level)
         self._level = 1  # current highest in-use level (1-indexed count)
         self._size = 0
-        self._rng = random.Random()
+        # Allow callers to inject a seeded RNG for deterministic behavior.
+        # Precedence: explicit `rng` > `seed` > fresh unseeded Random().
+        if rng is not None:
+            self._rng = rng
+        else:
+            self._rng = random.Random(seed)
 
     # ---- Internal helpers ----
 
@@ -74,8 +85,9 @@ class SkipList:
 
         new_level = self._random_level()
         if new_level > self._level:
-            for i in range(self._level, new_level):
-                update[i] = self._head
+            # `update` is already pre-filled with self._head for all levels
+            # above the current self._level (see initialization above), so no
+            # additional fill-in is needed here.
             self._level = new_level
 
         new_node = _Node(key, value, new_level)
@@ -146,10 +158,10 @@ class SkipList:
         return self._size
 
     def __contains__(self, key: object) -> bool:
+        # treat non-int as not present; reject bool to avoid surprises
+        # (bool is a subclass of int in Python)
         if not isinstance(key, int) or isinstance(key, bool):
-            # treat non-int as not present; reject bool to avoid surprises
-            if not isinstance(key, int):
-                return False
+            return False
         cur = self._head
         for i in range(self._level - 1, -1, -1):
             nxt = cur.forward[i]
