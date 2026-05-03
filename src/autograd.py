@@ -56,7 +56,8 @@ class Value:
         out = Value(self.data ** other, (self,), f"**{other}")
 
         def _backward():
-            self.grad += other * (self.data ** (other - 1)) * out.grad
+            if other != 0:
+                self.grad += other * (self.data ** (other - 1)) * out.grad
 
         out._backward = _backward
         return out
@@ -109,15 +110,23 @@ class Value:
         topo = []
         visited = set()
 
-        def build(v):
+        # Iterative DFS post-order traversal to avoid Python recursion limit
+        # on deep graphs. Each stack entry is (node, children_pushed) where
+        # children_pushed is True after we have queued the nodes children.
+        stack = [(self, False)]
+        while stack:
+            v, children_pushed = stack.pop()
+            if children_pushed:
+                topo.append(v)
+                continue
             if id(v) in visited:
-                return
+                continue
             visited.add(id(v))
+            stack.append((v, True))
             for child in v._prev:
-                build(child)
-            topo.append(v)
+                if id(child) not in visited:
+                    stack.append((child, False))
 
-        build(self)
         self.grad = 1.0
         for node in reversed(topo):
             node._backward()

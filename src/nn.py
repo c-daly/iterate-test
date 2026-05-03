@@ -10,6 +10,10 @@ class Module:
     def parameters(self):
         return []
 
+    def zero_grad(self):
+        for p in self.parameters():
+            p.grad = 0.0
+
 
 class Neuron(Module):
     def __init__(self, nin, activation="relu"):
@@ -50,7 +54,8 @@ class Layer(Module):
 
 class MLP(Module):
     def __init__(self, nin, nouts):
-        sizes = [nin] + list(nouts)
+        nouts = list(nouts)
+        sizes = [nin] + nouts
         layers = []
         for i, (a, b) in enumerate(zip(sizes[:-1], sizes[1:])):
             is_last = i == len(nouts) - 1
