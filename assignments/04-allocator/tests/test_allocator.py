@@ -189,9 +189,33 @@ def test_firstfit_no_split_when_remainder_small() -> None:
     a = FirstFitAllocator(64)
     a.alloc(50)  # remainder 14 < 16, take whole 64.
     s = a.stats()
-    assert s.allocated == 64
+    # Even though the whole 64-byte block is consumed, the caller asked for 50.
+    # ``allocated`` is requested-size accounting; the absorbed 14 bytes show up
+    # as missing free space (free == 0, no split block) but never inflate
+    # ``allocated`` past what callers requested.
+    assert s.allocated == 50
     assert s.num_free_blocks == 0
     assert s.free == 0
+
+
+def test_firstfit_allocated_reflects_requested_not_padded() -> None:
+    """alloc(120) from a 128 pool absorbs the 8-byte tail (< split threshold 16);
+    stats.allocated must report the requested 120, not the padded 128."""
+    a = FirstFitAllocator(128)
+    off = a.alloc(120)
+    s = a.stats()
+    assert s.allocated == 120
+    assert s.num_allocations == 1
+    # The 8-byte tail is absorbed (no split): no free block survives.
+    assert s.num_free_blocks == 0
+    assert s.free == 0
+    # On free, the allocator must recover the true 128-byte block size from
+    # the neighbours and return all of it to the pool.
+    a.free(off)
+    s2 = a.stats()
+    assert s2.allocated == 0
+    assert s2.free == 128
+    assert s2.num_free_blocks == 1
 
 
 def test_firstfit_coalesce_left_right_neighbors() -> None:

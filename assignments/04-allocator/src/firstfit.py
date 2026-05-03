@@ -42,18 +42,24 @@ class FirstFitAllocator(Allocator):
                 self._free.pop(i)
                 if remainder >= _SPLIT_THRESHOLD:
                     insort(self._free, (off + size, remainder))
-                    self._live[off] = size
-                else:
-                    # Consume the whole block.
-                    self._live[off] = blk
+                # Always record the *requested* size so stats.allocated reflects
+                # what the caller asked for, not the (possibly absorbed) block.
+                # The true block size is recovered on free() from neighbours.
+                self._live[off] = size
                 return off
         raise AllocationError(f"no free block of size {size} available")
 
     def free(self, offset: int) -> None:
         if offset not in self._live:
             raise AllocationError(f"invalid free at offset {offset}")
-        size = self._live.pop(offset)
-        self._insert_and_coalesce(offset, size)
+        # _live[offset] holds the *requested* size, which may be smaller than
+        # the underlying block when the alloc absorbed a sub-threshold tail.
+        # Derive the true block size from neighbours: the block extends from
+        # ``offset`` until the next free block, the next live block, or the
+        # end of the pool, whichever comes first.
+        del self._live[offset]
+        block_size = self._block_size_from_neighbours(offset)
+        self._insert_and_coalesce(offset, block_size)
 
     def stats(self) -> AllocatorStats:
         allocated = sum(self._live.values())
@@ -86,6 +92,25 @@ class FirstFitAllocator(Allocator):
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    def _block_size_from_neighbours(self, offset: int) -> int:
+        """Return the true block size of the live block starting at ``offset``.
+
+        The block extends until the nearest of: the next free block, the next
+        live block, or the end of the pool. Called after ``_live[offset]``
+        has been removed so it is not considered as its own neighbour.
+        """
+        # Smallest free-block start strictly greater than offset.
+        next_free = min(
+            (o for o, _ in self._free if o > offset),
+            default=self.pool_size,
+        )
+        # Smallest live-block start strictly greater than offset.
+        next_live = min(
+            (o for o in self._live if o > offset),
+            default=self.pool_size,
+        )
+        return min(next_free, next_live) - offset
 
     def _insert_and_coalesce(self, offset: int, size: int) -> None:
         """Insert a freed range and merge with any adjacent free neighbours."""
