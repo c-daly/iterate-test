@@ -382,3 +382,16 @@ class TestBackwardEdgeCases:
         out.backward()
         expected = finite_diff(f, x_val)
         assert approx(x.grad, expected, tol=1e-3)
+
+
+class TestPowZeroExponentRegression:
+    """Regression: Value(0.0) ** 0 must not raise ZeroDivisionError on backward."""
+
+    def test_zero_pow_zero_backward_no_raise(self):
+        # Value(0.0) ** 0 used to ZeroDivisionError in _backward via
+        # 0 * 0**-1; the derivative of x**0 is 0 everywhere defined.
+        a = Value(0.0)
+        c = a ** 0
+        assert c.data == 1.0  # Python: 0.0 ** 0 == 1.0
+        c.backward()
+        assert a.grad == 0.0

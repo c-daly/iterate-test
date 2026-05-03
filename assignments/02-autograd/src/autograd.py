@@ -78,7 +78,11 @@ class Value:
         out = Value(self.data ** exponent, _children=(self,), _op=f"**{exponent}")
 
         def _backward() -> None:
-            self.grad += exponent * (self.data ** (exponent - 1)) * out.grad
+            # d/dx x**n = n * x**(n-1). When n == 0 the derivative is 0
+            # everywhere it is defined; skip the n*x**(n-1) computation to
+            # avoid 0 * 0**-1 -> ZeroDivisionError at x == 0.
+            if exponent != 0:
+                self.grad += exponent * (self.data ** (exponent - 1)) * out.grad
 
         out._backward = _backward
         return out
