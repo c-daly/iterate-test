@@ -395,3 +395,21 @@ class TestPowZeroExponentRegression:
         assert c.data == 1.0  # Python: 0.0 ** 0 == 1.0
         c.backward()
         assert a.grad == 0.0
+
+
+class TestDeepGraphBackwardRegression:
+    """Regression: backward() must handle graphs deeper than Python recursion limit."""
+
+    def test_deep_chain_backward_no_recursion_error(self):
+        # Recursive topological sort blew Python recursion limit on long
+        # chains; the iterative DFS must handle depth >> sys.getrecursionlimit.
+        import sys
+        depth = 2000
+        assert depth > sys.getrecursionlimit() // 2
+        x = Value(0.0)
+        cur = x
+        for _ in range(depth):
+            cur = cur + 1
+        assert cur.data == float(depth)
+        cur.backward()
+        assert x.grad == 1.0

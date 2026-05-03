@@ -139,18 +139,28 @@ class Value:
         across multiple loss evaluations are responsible for resetting grad
         to 0.0 between calls (mirrors the zero_grad pattern from PyTorch).
         """
+        # Iterative post-order DFS using a two-color (gray/black) marking
+        # scheme. A recursive build() can exceed Python default 1000-frame
+        # recursion limit on deep computation graphs (long chains of ops),
+        # so we manage the traversal stack explicitly.
         topo: list[Value] = []
         visited: set[int] = set()
+        # Stack entries are (node, expanded). expanded=False means first
+        # visit (push children); expanded=True means post-order (append).
+        stack: list[tuple[Value, bool]] = [(self, False)]
+        while stack:
+            node, expanded = stack.pop()
+            if expanded:
+                topo.append(node)
+                continue
+            if id(node) in visited:
+                continue
+            visited.add(id(node))
+            stack.append((node, True))
+            for child in node._prev:
+                if id(child) not in visited:
+                    stack.append((child, False))
 
-        def build(v: Value) -> None:
-            if id(v) in visited:
-                return
-            visited.add(id(v))
-            for child in v._prev:
-                build(child)
-            topo.append(v)
-
-        build(self)
         self.grad += 1.0
         for node in reversed(topo):
             node._backward()
