@@ -75,6 +75,33 @@ def test_delete_returns_false_when_missing() -> None:
 
 
 # ---------------------------------------------------------------------------
+# None-value semantics for membership vs search
+# ---------------------------------------------------------------------------
+
+
+def test_contains_with_none_value() -> None:
+    # Regression: ``__contains__`` must not delegate to ``search``, because
+    # ``search`` returns ``None`` both for missing keys and for keys whose
+    # value happens to be ``None``. Membership is independent of the value.
+    sl = SkipList()
+    sl.insert(1, None)
+    assert 1 in sl
+    assert len(sl) == 1
+
+
+def test_search_returns_none_for_inserted_none() -> None:
+    # Inserting a key with value ``None`` is legal; ``search`` happens to
+    # return ``None`` for both "absent" and "present-with-None". This is the
+    # documented behaviour and ``__contains__`` is the disambiguating call.
+    sl = SkipList()
+    sl.insert(7, None)
+    assert sl.search(7) is None
+    assert sl.search(99) is None
+    assert 7 in sl
+    assert 99 not in sl
+
+
+# ---------------------------------------------------------------------------
 # Duplicate-key semantics (update)
 # ---------------------------------------------------------------------------
 

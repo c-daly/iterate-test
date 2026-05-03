@@ -116,7 +116,18 @@ class SkipList:
     def __contains__(self, key: object) -> bool:
         if not isinstance(key, int):
             return False
-        return self.search(key) is not None
+        # Walk directly to the level-0 successor of key rather than delegating
+        # to ``search``: ``search`` returns ``None`` both for a missing key and
+        # for a present key whose value happens to be ``None``, so it cannot
+        # answer membership questions on its own.
+        node = self._header
+        for i in range(self._level - 1, -1, -1):
+            nxt = node.forward[i]
+            while nxt is not None and nxt.key < key:
+                node = nxt
+                nxt = node.forward[i]
+        candidate = node.forward[0]
+        return candidate is not None and candidate.key == key
 
     def __iter__(self) -> Iterator[tuple[int, Any]]:
         node = self._header.forward[0]
