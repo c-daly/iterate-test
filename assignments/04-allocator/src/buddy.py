@@ -30,8 +30,9 @@ class BuddyAllocator(Allocator):
         if not _is_power_of_two(pool_size):
             raise ValueError("pool_size must be a power of two")
         super().__init__(pool_size)
-        # Free lists keyed by block size (power of two). Each list holds offsets.
-        self._free: dict[int, list[int]] = {pool_size: [0]}
+        # Free lists keyed by block size (power of two). Each set holds offsets.
+        # Sets give O(1) buddy lookup and removal during coalescing.
+        self._free: dict[int, set[int]] = {pool_size: {0}}
         # offset -> size for live allocations.
         self._live: dict[int, int] = {}
 
@@ -53,12 +54,12 @@ class BuddyAllocator(Allocator):
         if candidate > self.pool_size:
             raise AllocationError(f"no free block of size {block} available")
 
-        offset = self._free[candidate].pop(0)
+        offset = self._free[candidate].pop()
         # Split down to the requested block size.
         while candidate > block:
             candidate >>= 1
             buddy = offset + candidate
-            self._free.setdefault(candidate, []).append(buddy)
+            self._free.setdefault(candidate, set()).add(buddy)
         self._live[offset] = block
         return offset
 
@@ -70,7 +71,7 @@ class BuddyAllocator(Allocator):
 
     def stats(self) -> AllocatorStats:
         allocated = sum(self._live.values())
-        free_blocks = [(off, sz) for sz, lst in self._free.items() for off in lst]
+        free_blocks = [(off, sz) for sz, offsets in self._free.items() for off in offsets]
         free_total = sum(sz for _, sz in free_blocks)
         num_free = len(free_blocks)
         if free_total > 0 and num_free > 0:
@@ -90,7 +91,7 @@ class BuddyAllocator(Allocator):
     def dump(self) -> str:
         """Return a multi-line description of live and free blocks, sorted by offset."""
         live = [(off, sz, "USED") for off, sz in self._live.items()]
-        free = [(off, sz, "FREE") for sz, lst in self._free.items() for off in lst]
+        free = [(off, sz, "FREE") for sz, offsets in self._free.items() for off in offsets]
         rows = sorted(live + free, key=lambda r: r[0])
         lines = [f"BuddyAllocator pool_size={self.pool_size}"]
         for off, sz, tag in rows:
@@ -105,11 +106,11 @@ class BuddyAllocator(Allocator):
         """Recursively merge with buddy if the buddy is free and same-sized."""
         while size < self.pool_size:
             buddy = offset ^ size
-            siblings = self._free.get(size, [])
-            if buddy in siblings:
-                siblings.remove(buddy)
+            siblings = self._free.get(size)
+            if siblings is not None and buddy in siblings:
+                siblings.discard(buddy)
                 offset = min(offset, buddy)
                 size <<= 1
             else:
                 break
-        self._free.setdefault(size, []).append(offset)
+        self._free.setdefault(size, set()).add(offset)
