@@ -33,12 +33,6 @@ class LetStmt(Node):
 
 
 @dataclass
-class AssignStmt(Node):
-    name: str
-    value: Node
-
-
-@dataclass
 class IfStmt(Node):
     cond: Node
     then_block: List[Node]

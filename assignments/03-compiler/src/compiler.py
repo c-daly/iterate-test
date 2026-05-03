@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Tuple
 
 from .parser import (
     Assign,
-    AssignStmt,
     Binary,
     BoolLit,
     Call,
@@ -53,8 +52,6 @@ class OpCode(Enum):
     GT = auto()
     LE = auto()
     GE = auto()
-    AND = auto()
-    OR = auto()
     LOAD = auto()
     STORE = auto()
     DEFINE = auto()
@@ -145,10 +142,6 @@ class Compiler:
         if isinstance(node, LetStmt):
             self._compile_expr(chunk, node.value)
             chunk.emit(OpCode.DEFINE, node.name)
-            return
-        if isinstance(node, AssignStmt):
-            self._compile_expr(chunk, node.value)
-            chunk.emit(OpCode.STORE, node.name)
             return
         if isinstance(node, IfStmt):
             self._compile_if(chunk, node)
