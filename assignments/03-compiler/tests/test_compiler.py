@@ -394,3 +394,57 @@ class TestVM:
         chunk.emit(OpCode.HALT)
         out = VM().run(chunk)
         assert out == ["7"]
+
+
+class TestLexicalScoping:
+    """Regression tests for static (lexical) scoping of free variables.
+
+    Functions must look up free variables in the environment where they
+    were *defined*, not where they are *called*. The previous (buggy)
+    behaviour chained the new call frame off the caller env, giving
+    dynamic scoping.
+    """
+
+    def test_function_does_not_see_callers_local(self):
+        # The classic dynamic-vs-static scoping discriminator. Under
+        # dynamic scoping `f` would see `caller`s local `x` (= 99);
+        # under lexical scoping it sees the outer `x` (= 10) from
+        # where `f` was defined.
+        src = (
+            "let x = 10; "
+            "fn f() { return x; } "
+            "fn caller() { let x = 99; return f(); } "
+            "print caller();"
+        )
+        assert execute(src) == ["10"]
+
+    def test_function_sees_outer_var_after_caller_mutation(self):
+        # Free-variable resolution still goes through the env chain
+        # at lookup time, so subsequent assignments to the outer `x`
+        # ARE visible (this is normal lexical scoping with mutable
+        # bindings, not snapshot capture).
+        src = (
+            "let x = 1; "
+            "fn read_x() { return x; } "
+            "x = 2; "
+            "print read_x();"
+        )
+        assert execute(src) == ["2"]
+
+    def test_returned_inner_fn_keeps_lexical_env(self):
+        # `outer` declares a local `n`, then declares `inner` which
+        # references `n`. `outer` returns `inner` itself (not the
+        # result of calling it). When the returned closure is called
+        # from top-level (where `n` is *not* in scope), lexical
+        # scoping must still find `n` via inner.def_env. Under the
+        # old dynamic-scoping bug this raises `Undefined variable: n`.
+        src = (
+            "fn outer() { "
+            "let n = 7; "
+            "fn inner() { return n; } "
+            "return inner; "
+            "} "
+            "let g = outer(); "
+            "print g();"
+        )
+        assert execute(src) == ["7"]

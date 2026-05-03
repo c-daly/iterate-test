@@ -60,6 +60,7 @@ class OpCode(Enum):
     CALL = auto()
     RETURN = auto()
     PRINT = auto()
+    MAKE_FN = auto()
     HALT = auto()
 
 
@@ -68,11 +69,18 @@ Instruction = Tuple[OpCode, Any]
 
 @dataclass
 class Function:
-    """A compiled function: name, parameter list, body chunk."""
+    """A compiled function: name, parameter list, body chunk, def-time env.
+
+    `def_env` is the lexical environment that was active when the `fn`
+    declaration ran. Set at runtime by the `MAKE_FN` opcode. Functions
+    stored in the constant pool are templates with `def_env=None`; the
+    VM produces a fresh, env-bound copy each time the declaration executes.
+    """
 
     name: str
     params: List[str]
     chunk: "Chunk"
+    def_env: Any = None  # Optional["Environment"]; typed loosely to avoid import cycle
 
 
 @dataclass
@@ -205,9 +213,13 @@ class Compiler:
         idx = body_chunk.add_const(None)
         body_chunk.emit(OpCode.CONST, idx)
         body_chunk.emit(OpCode.RETURN)
-        fn = Function(name=node.name, params=list(node.params), chunk=body_chunk)
-        const_idx = chunk.add_const(fn)
+        # Build a *template* Function (def_env unset). MAKE_FN at runtime
+        # produces a fresh, env-bound copy each time the declaration runs,
+        # giving lexical (static) scoping for free variables.
+        fn_template = Function(name=node.name, params=list(node.params), chunk=body_chunk)
+        const_idx = chunk.add_const(fn_template)
         chunk.emit(OpCode.CONST, const_idx)
+        chunk.emit(OpCode.MAKE_FN)
         chunk.emit(OpCode.DEFINE, node.name)
 
     # ----------------------------------------------------------- expressions

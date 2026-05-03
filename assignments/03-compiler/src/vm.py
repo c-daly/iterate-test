@@ -6,7 +6,7 @@ functions.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional
 
 from .compiler import Chunk, Function, OpCode
@@ -167,6 +167,16 @@ class VM:
             if not _is_truthy(cond):
                 frame.ip = arg
             return True
+        if op == OpCode.MAKE_FN:
+            template = self.stack.pop()
+            if not isinstance(template, Function):
+                raise RuntimeError_(f"MAKE_FN expected Function, got {type(template).__name__}")
+            # Bind a fresh copy of the function to the env active at
+            # def-time. This gives lexical (static) scoping: free variables
+            # resolve against where the function was defined, not where it
+            # is called.
+            self.stack.append(replace(template, def_env=frame.env))
+            return True
         if op == OpCode.CALL:
             self._call(arg, frame)
             return True
@@ -247,9 +257,12 @@ class VM:
             )
         args = [self.stack.pop() for _ in range(arg_count)]
         args.reverse()
-        # New environment chained off the caller environment so functions can
-        # read outer variables (lexical scoping).
-        new_env = Environment(parent=caller.env)
+        # Lexical scoping: chain off the env active where the function was
+        # *defined* (captured at MAKE_FN time), not where it is called.
+        # Fall back to the caller env if def_env is missing (e.g. a Function
+        # constructed by hand in tests rather than via MAKE_FN).
+        parent_env = callee.def_env if callee.def_env is not None else caller.env
+        new_env = Environment(parent=parent_env)
         for param, value in zip(callee.params, args):
             new_env.define(param, value)
         self.frames.append(Frame(chunk=callee.chunk, ip=0, env=new_env))
