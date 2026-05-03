@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from .parser import (
     Assign,
@@ -84,13 +84,23 @@ class Chunk:
 
     code: List[Instruction] = field(default_factory=list)
     constants: List[Any] = field(default_factory=list)
+    # Cache for O(1) primitive-constant deduping. Keyed by (type, value)
+    # because Python conflates 1 == 1.0 == True under plain hashing/equality
+    # but we treat them as distinct constants. Non-hashable values (Function,
+    # list, ...) are simply appended without dedupe.
+    _const_index: Dict[Tuple[type, Any], int] = field(default_factory=dict, repr=False)
 
     def add_const(self, value: Any) -> int:
-        # Reuse identical primitive constants where it is safe.
-        if isinstance(value, (int, float, str, bool)):
-            for i, existing in enumerate(self.constants):
-                if type(existing) is type(value) and existing == value:
-                    return i
+        if isinstance(value, (int, float, str, bool)) or value is None:
+            key = (type(value), value)
+            cached = self._const_index.get(key)
+            if cached is not None:
+                return cached
+            self.constants.append(value)
+            idx = len(self.constants) - 1
+            self._const_index[key] = idx
+            return idx
+        # Fall through for non-hashable / non-primitive values: append, no dedupe.
         self.constants.append(value)
         return len(self.constants) - 1
 
