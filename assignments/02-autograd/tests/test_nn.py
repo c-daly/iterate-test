@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import random
 
+import pytest
+
 from autograd import Value
 from nn import Layer, MLP, Neuron
 
@@ -139,3 +141,13 @@ class TestXORConvergence:
 
         assert final < 0.05, "XOR did not converge"
         assert final < initial * 0.05
+
+
+class TestNeuronDimensionMismatch:
+    """Regression: Neuron.__call__ must reject inputs whose length != nin."""
+
+    def test_input_length_mismatch_raises(self):
+        # Previously zip() silently truncated, producing wrong gradients.
+        n = Neuron(3)
+        with pytest.raises(ValueError):
+            n([Value(1.0), Value(2.0)])

@@ -28,6 +28,12 @@ class Neuron:
         self.b: Value = Value(0.0)
 
     def __call__(self, x: List[Value]) -> Value:
+        # Validate input width up front; bare zip() would silently truncate
+        # to the shorter side and silently produce wrong gradients.
+        if len(x) != len(self.w):
+            raise ValueError(
+                f"expected {len(self.w)} inputs, got {len(x)}"
+            )
         # Pre-activation: sum(w_i * x_i) + b. Use Value(0.0) as the start to
         # keep the result inside the autograd graph regardless of nin.
         act: Value = self.b
