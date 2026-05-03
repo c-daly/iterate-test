@@ -34,8 +34,8 @@ class Neuron:
             raise ValueError(
                 f"expected {len(self.w)} inputs, got {len(x)}"
             )
-        # Pre-activation: sum(w_i * x_i) + b. Use Value(0.0) as the start to
-        # keep the result inside the autograd graph regardless of nin.
+        # Pre-activation: sum(w_i * x_i) + b. Seed with the bias Value so
+        # the result stays inside the autograd graph even when nin == 0.
         act: Value = self.b
         for wi, xi in zip(self.w, x):
             act = act + wi * xi
@@ -78,7 +78,7 @@ class MLP:
             activation = "none" if i == last_index else "relu"
             self.layers.append(Layer(sizes[i], nout, activation=activation))
 
-    def __call__(self, x: List[float]) -> List[Value]:
+    def __call__(self, x: List[float | Value]) -> List[Value]:
         # Convert all raw floats to Values at the boundary; if the caller
         # already passed Values they are forwarded unchanged.
         current: List[Value] = [xi if isinstance(xi, Value) else Value(float(xi)) for xi in x]
