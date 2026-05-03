@@ -137,8 +137,8 @@ class Compiler:
         if isinstance(node, P.Assign):
             self._expr(node.value)
             # duplicate so assignment is also an expression value
+            self._emit("DUP")
             self._emit("STORE", node.name, False)  # False = assign existing
-            self._emit("LOAD", node.name)
             return
         if isinstance(node, P.Binary):
             self._expr(node.left)

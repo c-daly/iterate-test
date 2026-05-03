@@ -89,40 +89,58 @@ def run(code: CodeObject) -> List[str]:
         elif op == "ADD":
             b = stack.pop()
             a = stack.pop()
-            if isinstance(a, str) or isinstance(b, str):
-                if not (isinstance(a, str) and isinstance(b, str)):
-                    raise VMError("Cannot add string to non-string")
-                stack.append(a + b)
-            else:
-                stack.append(a + b)
+            try:
+                if isinstance(a, str) or isinstance(b, str):
+                    if not (isinstance(a, str) and isinstance(b, str)):
+                        raise VMError("Cannot add string to non-string")
+                    stack.append(a + b)
+                else:
+                    stack.append(a + b)
+            except (TypeError, ValueError) as e:
+                raise VMError("ADD failed: " + str(e))
         elif op == "SUB":
             b = stack.pop()
             a = stack.pop()
-            stack.append(a - b)
+            try:
+                stack.append(a - b)
+            except (TypeError, ValueError) as e:
+                raise VMError("SUB failed: " + str(e))
         elif op == "MUL":
             b = stack.pop()
             a = stack.pop()
-            stack.append(a * b)
+            try:
+                stack.append(a * b)
+            except (TypeError, ValueError) as e:
+                raise VMError("MUL failed: " + str(e))
         elif op == "DIV":
             b = stack.pop()
             a = stack.pop()
             if b == 0:
                 raise VMError("Division by zero")
-            if isinstance(a, float) or isinstance(b, float):
-                stack.append(a / b)
-            elif a % b == 0:
-                stack.append(a // b)
-            else:
-                stack.append(a / b)
+            try:
+                if isinstance(a, float) or isinstance(b, float):
+                    stack.append(a / b)
+                elif a % b == 0:
+                    stack.append(a // b)
+                else:
+                    stack.append(a / b)
+            except (TypeError, ValueError) as e:
+                raise VMError("DIV failed: " + str(e))
         elif op == "MOD":
             b = stack.pop()
             a = stack.pop()
             if b == 0:
                 raise VMError("Modulo by zero")
-            stack.append(a % b)
+            try:
+                stack.append(a % b)
+            except (TypeError, ValueError) as e:
+                raise VMError("MOD failed: " + str(e))
         elif op == "NEG":
             a = stack.pop()
-            stack.append(-a)
+            try:
+                stack.append(-a)
+            except (TypeError, ValueError) as e:
+                raise VMError("NEG failed: " + str(e))
         elif op == "NOT":
             a = stack.pop()
             stack.append(not _truthy(a))
@@ -150,14 +168,8 @@ def run(code: CodeObject) -> List[str]:
             b = stack.pop()
             a = stack.pop()
             stack.append(a >= b)
-        elif op == "AND":
-            b = stack.pop()
-            a = stack.pop()
-            stack.append(a if not _truthy(a) else b)
-        elif op == "OR":
-            b = stack.pop()
-            a = stack.pop()
-            stack.append(a if _truthy(a) else b)
+        elif op == "DUP":
+            stack.append(stack[-1])
         elif op == "LOAD":
             name = args[0]
             stack.append(_lookup(frame, name))
@@ -169,7 +181,7 @@ def run(code: CodeObject) -> List[str]:
                 frame.locals[name] = value
             else:
                 if not _store_existing(frame, name, value):
-                    frame.locals[name] = value
+                    raise VMError("Assignment to undeclared variable: " + name)
         elif op == "JUMP":
             frame.ip = args[0]
         elif op == "JUMP_IF_FALSE":
@@ -208,8 +220,7 @@ def run(code: CodeObject) -> List[str]:
             frame = new_frame
         elif op == "RETURN":
             ret = stack.pop()
-            while len(stack) > frame.base_stack_len:
-                stack.pop()
+            del stack[frame.base_stack_len:]
             caller = frame.return_frame
             if caller is None:
                 return output
