@@ -1,13 +1,13 @@
 """Workload runner and side-by-side allocator comparison."""
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Iterable, Literal, Union
 
 from .allocator import AllocationError, Allocator, AllocatorStats
 from .buddy import BuddyAllocator
 from .firstfit import FirstFitAllocator
 
-Op = tuple  # ("alloc", size:int) | ("free", offset:int)
+Op = Union[tuple[Literal["alloc"], int], tuple[Literal["free"], int]]
 
 
 def run_workload(allocator: Allocator, ops: Iterable[Op]) -> AllocatorStats:

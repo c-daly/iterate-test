@@ -41,6 +41,8 @@ class BuddyAllocator(Allocator):
         self._free_lists: dict[int, set[int]] = {pool_size: {0}}
         # offset -> block_size of currently allocated blocks
         self._allocated: dict[int, int] = {}
+        # Running total of allocated bytes (kept in sync by alloc/free).
+        self._total_allocated: int = 0
 
     # ---- internal helpers ----
     def _smallest_size_for(self, size: int) -> int:
@@ -83,12 +85,14 @@ class BuddyAllocator(Allocator):
             raise AllocationError("request exceeds pool size")
         offset = self._split_until(block_size)
         self._allocated[offset] = block_size
+        self._total_allocated += block_size
         return offset
 
     def free(self, offset: int) -> None:
         if offset not in self._allocated:
             raise AllocationError(f"invalid free at offset {offset}")
         size = self._allocated.pop(offset)
+        self._total_allocated -= size
         # Coalesce recursively
         while size < self.pool_size:
             buddy = offset ^ size
@@ -104,13 +108,9 @@ class BuddyAllocator(Allocator):
         self._free_lists.setdefault(size, set()).add(offset)
 
     def stats(self) -> AllocatorStats:
-        allocated = sum(self._allocated.values())
-        free_blocks: list[int] = []
-        num_free_blocks = 0
-        for sz, offsets in self._free_lists.items():
-            for _ in offsets:
-                free_blocks.append(sz)
-                num_free_blocks += 1
+        allocated = self._total_allocated
+        free_blocks = [sz for sz, offsets in self._free_lists.items() for _ in offsets]
+        num_free_blocks = len(free_blocks)
         total_free = self.pool_size - allocated
         return AllocatorStats(
             total_size=self.pool_size,

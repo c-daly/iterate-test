@@ -67,6 +67,7 @@ def compute_fragmentation(free_blocks: list[int], total_free: int) -> float:
 
     Returns 0.0 when there is no free space.
     """
+    assert (total_free == 0) == (not free_blocks), "free-list/total-free mismatch"
     if total_free <= 0 or not free_blocks:
         return 0.0
     return 1.0 - (max(free_blocks) / total_free)
