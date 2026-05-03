@@ -319,3 +319,45 @@ class TestSimulation:
         after = time.time()
         assert isinstance(ev.timestamp, float)
         assert before <= ev.timestamp <= after
+
+
+class TestCausalOrderTopological:
+    def test_causal_order_respects_happens_before_for_all_pairs(self):
+        import random
+
+        rng = random.Random(0xC0DA15)
+        sim = Simulation(["A", "B", "C", "D"])
+        node_ids = ["A", "B", "C", "D"]
+        events_emitted = 0
+        while events_emitted < 100:
+            op = rng.choices(
+                ["local", "send", "deliver"], weights=[3, 2, 2], k=1
+            )[0]
+            if op == "local":
+                nid = rng.choice(node_ids)
+                sim.local_event(nid, data={"k": events_emitted})
+                events_emitted += 1
+            elif op == "send":
+                src, dst = rng.sample(node_ids, 2)
+                sim.send_message(src, dst, data={"k": events_emitted})
+                events_emitted += 1
+            else:
+                candidates = [nid for nid in node_ids if sim.inboxes[nid]]
+                if not candidates:
+                    continue
+                dst = rng.choice(candidates)
+                sim.deliver_message(dst)
+                events_emitted += 1
+
+        log = sim.get_log()
+        assert len(log.events) >= 100
+        ordered = log.causal_order()
+        assert len(ordered) == len(log.events)
+
+        for i in range(len(ordered)):
+            for j in range(i + 1, len(ordered)):
+                a, b = ordered[i], ordered[j]
+                assert not b.clock.happens_before(a.clock), (
+                    f"causal_order violation: index {j} clock {b.clock} "
+                    f"happens-before index {i} clock {a.clock}"
+                )
