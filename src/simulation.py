@@ -27,6 +27,8 @@ class Simulation:
         return self.nodes[node_id].local_event(data)
 
     def send_message(self, from_id: str, to_id: str, data: Any = None) -> Event:
+        if from_id not in self.nodes:
+            raise KeyError(f"unknown sender: {from_id}")
         if to_id not in self.nodes:
             raise KeyError(f"unknown recipient: {to_id}")
         ev, msg = self.nodes[from_id].send(data)

@@ -74,12 +74,11 @@ class EventLog:
     def find_conflicts(self, key: str) -> List[Tuple[Event, Event]]:
         """Concurrent event pairs whose data is a dict containing key."""
         out: List[Tuple[Event, Event]] = []
-        for a, b in self.concurrent_pairs():
-            if (
-                isinstance(a.data, dict)
-                and isinstance(b.data, dict)
-                and key in a.data
-                and key in b.data
-            ):
-                out.append((a, b))
+        relevant = [
+            e for e in self.events if isinstance(e.data, dict) and key in e.data
+        ]
+        for i in range(len(relevant)):
+            for j in range(i + 1, len(relevant)):
+                if relevant[i].clock.is_concurrent(relevant[j].clock):
+                    out.append((relevant[i], relevant[j]))
         return out

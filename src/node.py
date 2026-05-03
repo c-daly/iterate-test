@@ -29,7 +29,7 @@ class Node:
 
     def _next_timestamp(self) -> float:
         # Use wall clock plus a tiny per-node offset for monotonicity.
-        ts = time.time() + self._seq * 1e-9
+        ts = time.time() + self._seq * 1e-4
         self._seq += 1
         return ts
 

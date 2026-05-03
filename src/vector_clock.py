@@ -21,19 +21,15 @@ class VectorClock:
     ) -> None:
         self.node_id = node_id
         if counters is None:
-            self.counters = {str(i): 0 for i in range(num_nodes)}
-            if node_id not in self.counters:
-                # Replace highest-indexed placeholder with the local id so
-                # we still have ``num_nodes`` entries total.
-                if num_nodes > 0:
-                    placeholder = max(
-                        (k for k in self.counters if k.isdigit()),
-                        key=lambda k: int(k),
-                        default=None,
-                    )
-                    if placeholder is not None:
-                        del self.counters[placeholder]
-                self.counters[node_id] = 0
+            # Seed with the local node id, then pad with placeholder ids
+            # "0", "1", ... until we have ``num_nodes`` entries.
+            self.counters = {node_id: 0}
+            i = 0
+            while len(self.counters) < num_nodes:
+                placeholder = str(i)
+                if placeholder not in self.counters:
+                    self.counters[placeholder] = 0
+                i += 1
         else:
             self.counters = dict(counters)
             if node_id not in self.counters:
@@ -79,12 +75,16 @@ class VectorClock:
 
     def happens_before(self, other: "VectorClock") -> bool:
         if not isinstance(other, VectorClock):
-            return NotImplemented
+            raise TypeError(
+                f"happens_before expected VectorClock, got {type(other).__name__}"
+            )
         return self._le_pointwise(other) and self != other
 
     def is_concurrent(self, other: "VectorClock") -> bool:
         if not isinstance(other, VectorClock):
-            return NotImplemented
+            raise TypeError(
+                f"is_concurrent expected VectorClock, got {type(other).__name__}"
+            )
         if self == other:
             return False
         return not self.happens_before(other) and not other.happens_before(self)
@@ -122,7 +122,7 @@ class VectorClock:
         return other.happens_before(self)
 
     def __hash__(self) -> int:
-        return hash((self.node_id, tuple(sorted(self.counters.items()))))
+        return hash(tuple(sorted(self.counters.items())))
 
     def __repr__(self) -> str:
         items = ", ".join(f"{k}={v}" for k, v in sorted(self.counters.items()))
