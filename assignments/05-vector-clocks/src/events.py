@@ -14,7 +14,7 @@ from typing import Any
 from src.vector_clock import VectorClock
 
 
-@dataclass
+@dataclass(eq=False)
 class Event:
     """A single recorded event.
 
@@ -30,13 +30,6 @@ class Event:
     clock: VectorClock
     timestamp: float
     data: Any = None
-
-    # Use identity equality/hashing: two writes with the same payload are
-    # still two different events and must not collapse in sets/indexing.
-    __hash__ = object.__hash__
-
-    def __eq__(self, other):  # noqa: D401 - identity semantics
-        return self is other
 
     def _key(self) -> Any:
         """Return the key this event writes, if any."""

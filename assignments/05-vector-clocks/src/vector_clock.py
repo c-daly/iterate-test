@@ -75,9 +75,6 @@ class VectorClock:
 
     # -- causality queries ----------------------------------------------
 
-    def _all_keys(self, other: "VectorClock") -> set[str]:
-        return set(self.clock) | set(other.clock)
-
     def happens_before(self, other: "VectorClock") -> bool:
         """True iff this event causally precedes ``other`` (strict).
 
@@ -85,30 +82,52 @@ class VectorClock:
         least one is strictly <.  Irreflexive (an event never happens before
         itself) and transitive by construction.
         """
-        keys = self._all_keys(other)
         strictly_less = False
-        for k in keys:
-            mine = self.clock.get(k, 0)
+        for k, mine in self.clock.items():
             theirs = other.clock.get(k, 0)
             if mine > theirs:
                 return False
             if mine < theirs:
                 strictly_less = True
+        if not strictly_less:
+            for k, theirs in other.clock.items():
+                if theirs > 0 and k not in self.clock:
+                    strictly_less = True
+                    break
         return strictly_less
 
     def is_concurrent(self, other: "VectorClock") -> bool:
         """True iff neither clock happens-before the other and they differ."""
-        if self == other:
-            return False
-        return not self.happens_before(other) and not other.happens_before(self)
+        greater = False
+        less = False
+        for k, mine in self.clock.items():
+            theirs = other.clock.get(k, 0)
+            if mine > theirs:
+                greater = True
+            elif mine < theirs:
+                less = True
+            if greater and less:
+                return True
+        if not (greater and less):
+            for k, theirs in other.clock.items():
+                if k not in self.clock and theirs > 0:
+                    less = True
+                    if greater:
+                        return True
+        return False
 
     # -- comparison operators -------------------------------------------
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, VectorClock):
             return NotImplemented
-        keys = self._all_keys(other)
-        return all(self.clock.get(k, 0) == other.clock.get(k, 0) for k in keys)
+        for k, v in self.clock.items():
+            if v != other.clock.get(k, 0):
+                return False
+        for k, v in other.clock.items():
+            if v > 0 and k not in self.clock:
+                return False
+        return True
 
     def __hash__(self):
         # Hash over the non-zero components so equal clocks hash equally
@@ -119,7 +138,10 @@ class VectorClock:
     def __le__(self, other) -> bool:
         if not isinstance(other, VectorClock):
             return NotImplemented
-        return self == other or self.happens_before(other)
+        for k, mine in self.clock.items():
+            if mine > other.clock.get(k, 0):
+                return False
+        return True
 
     def __lt__(self, other) -> bool:
         if not isinstance(other, VectorClock):
