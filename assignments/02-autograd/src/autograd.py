@@ -55,6 +55,10 @@ class Value:
         out = Value(self.data ** other, _children=(self,), _op=f"**{other}")
 
         def _backward():
+            # d(x**0)/dx = 0 for all x; guard avoids computing 0 ** -1
+            # (ZeroDivisionError) when self.data == 0 and other == 0.
+            if other == 0:
+                return
             self.grad += (other * self.data ** (other - 1)) * out.grad
 
         out._backward = _backward
@@ -113,22 +117,32 @@ class Value:
     def backward(self):
         """Topologically sort the graph and back-propagate gradients.
 
-        Seeds the output node with ``grad += 1`` (dout/dout = 1) and invokes
-        each node's ``_backward`` closure in reverse topological order,
-        accumulating into every input's ``grad``. Gradients are intentionally
-        not zeroed here, so callers manage zeroing between independent passes.
+        Seeds the output node by assigning ``grad = 1`` (dout/dout = 1) and
+        invokes each node's ``_backward`` closure in reverse topological
+        order, accumulating into every input's ``grad``. The seed is a hard
+        assignment, not an accumulation, so any pre-existing value in this
+        node's ``grad`` is overwritten on each call. Input gradients are
+        intentionally not zeroed here, so callers manage zeroing between
+        independent passes.
         """
+        # Iterative post-order DFS (explicit stack) instead of recursion so
+        # deep computation graphs (long op chains, deep nets) do not hit
+        # Python's recursion limit and raise RecursionError.
         topo = []
         visited = set()
-
-        def build_topo(node):
-            if node not in visited:
+        stack = [(self, False)]
+        while stack:
+            node, processed = stack.pop()
+            if node in visited:
+                continue
+            if processed:
                 visited.add(node)
-                for child in node._prev:
-                    build_topo(child)
                 topo.append(node)
-
-        build_topo(self)
+            else:
+                stack.append((node, True))
+                for child in node._prev:
+                    if child not in visited:
+                        stack.append((child, False))
 
         self.grad = 1.0
         for node in reversed(topo):

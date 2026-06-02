@@ -453,9 +453,11 @@ def test_constant_expression_has_no_input_grad():
     assert _approx(a.grad, 0.0)
 
 
-def test_repeated_backward_accumulates_without_reset():
-    # Calling backward() twice on the same graph (no manual zeroing)
-    # accumulates the seed twice; gradients should double.
+def test_repeated_backward_resets_seed_but_accumulates_input_grads():
+    # backward() hard-assigns the output seed (out.grad = 1) each call, so
+    # the seed does not accumulate. Input grads ARE never zeroed, so calling
+    # backward() twice (no manual zeroing) adds the same per-call delta
+    # again, doubling the input gradients.
     a, b = Value(2.0), Value(3.0)
     out = a * b
     out.backward()
@@ -475,3 +477,26 @@ def test_topological_order_handles_long_chain():
     # acc = 21 * x  -> d/dx = 21
     assert _approx(acc.data, 21.0)
     assert _approx(x.grad, 21.0)
+
+
+def test_pow_zero_exponent_backward_no_zero_division():
+    # d(x**0)/dx == 0 for all x, including x == 0. The backward pass must not
+    # raise ZeroDivisionError by computing 0 ** -1.
+    x = Value(0.0)
+    out = x ** 0
+    assert out.data == 1.0
+    out.backward()  # would raise ZeroDivisionError without the other==0 guard
+    assert _approx(x.grad, 0.0)
+
+
+def test_backward_handles_deep_chain_without_recursion_error():
+    # A linear chain far deeper than Python's default recursion limit (~1000)
+    # must back-propagate via the iterative topo sort without RecursionError.
+    x = Value(1.0)
+    acc = x
+    depth = 3000
+    for _ in range(depth):
+        acc = acc + x  # acc = (depth + 1) * x
+    acc.backward()
+    assert _approx(acc.data, float(depth + 1))
+    assert _approx(x.grad, float(depth + 1))
