@@ -91,10 +91,9 @@ class SkipList:
 
         node_level = self._random_level()
         if node_level > self.level:
-            # New node is taller than the current list height; the header is
-            # the predecessor at each newly used level.
-            for i in range(self.level, node_level):
-                update[i] = self._header
+            # New node is taller than the current list height. update[i] is
+            # already self._header for i >= self.level (set by
+            # _find_predecessors), so no explicit back-fill is needed.
             self.level = node_level
 
         node = _Node(key, value, node_level)
@@ -110,9 +109,11 @@ class SkipList:
         if target is None or target.key != key:
             return False
 
-        for i in range(self.level):
-            if update[i].forward[i] is target:
-                update[i].forward[i] = target.forward[i]
+        # target participates only in levels 0..len(target.forward)-1, and
+        # update[i] is its predecessor at each of those levels, so
+        # update[i].forward[i] is guaranteed to be target there.
+        for i in range(len(target.forward)):
+            update[i].forward[i] = target.forward[i]
         # Shrink the height if the top levels are now empty.
         while self.level > 1 and self._header.forward[self.level - 1] is None:
             self.level -= 1
@@ -120,7 +121,13 @@ class SkipList:
         return True
 
     def search(self, key: int) -> Any | None:
-        """Return the value bound to ``key``, or None if absent."""
+        """Return the value bound to ``key``, or None if absent.
+
+        .. note::
+            ``None`` is returned for both a missing key *and* a key whose
+            stored value is ``None``. Use ``key in sl`` (``__contains__``) to
+            distinguish the two cases when ``None`` is a valid stored value.
+        """
         node = self._header
         for i in range(self.level - 1, -1, -1):
             nxt = node.forward[i]

@@ -21,6 +21,15 @@ from skiplist import SkipList
 # --------------------------------------------------------------------------- #
 # Fixtures / helpers
 # --------------------------------------------------------------------------- #
+@pytest.fixture(autouse=True)
+def reset_random_seed():
+    # Tests that call random.seed() mutate the global random state; save and
+    # restore it so seeding cannot pollute other (order-dependent) tests.
+    state = random.getstate()
+    yield
+    random.setstate(state)
+
+
 @pytest.fixture
 def sl():
     return SkipList()
