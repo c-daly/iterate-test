@@ -9,6 +9,8 @@ fragmentation). On free, the region is returned to the free list and
 coalesced with any immediately adjacent free regions.
 """
 
+import bisect
+
 from allocator import AllocationError, Allocator, AllocatorStats
 
 MIN_SPLIT = 16
@@ -54,9 +56,9 @@ class FirstFitAllocator(Allocator):
         if offset not in self._live:
             raise AllocationError(f"invalid or already-freed offset: {offset}")
         size = self._live.pop(offset)
-        # Insert the freed region into the sorted free list.
-        self._free.append([offset, size])
-        self._free.sort()
+        # Insert the freed region into the already-sorted free list in
+        # O(log n) search + O(n) shift, avoiding a full re-sort.
+        bisect.insort(self._free, [offset, size])
         self._coalesce()
 
     def _coalesce(self) -> None:

@@ -100,10 +100,11 @@ class BuddyAllocator(Allocator):
     def stats(self) -> AllocatorStats:
         allocated = sum(self._live.values())
         free = self.pool_size - allocated
-        free_blocks = self._free_block_offsets()
-        num_free_blocks = len(free_blocks)
-        if free > 0 and free_blocks:
-            largest = max(size for _, size in free_blocks)
+        num_free_blocks = sum(len(offs) for offs in self._free.values())
+        if free > 0 and num_free_blocks > 0:
+            largest = max(
+                (size for size, offs in self._free.items() if offs), default=0
+            )
             fragmentation = 1.0 - (largest / free)
         else:
             fragmentation = 0.0

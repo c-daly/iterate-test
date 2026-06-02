@@ -48,10 +48,14 @@ def run_workload(allocator: Allocator, ops: list[tuple]) -> AllocatorStats:
     return allocator.stats()
 
 
-def compare(pool_size: int, ops: list[tuple]) -> dict:
+def compare(pool_size: int, ops: list[tuple]) -> dict[str, AllocatorStats]:
     """Run the same workload on both allocators and return their stats.
 
     Returns a mapping of allocator name -> final ``AllocatorStats``.
+
+    Note:
+        ``pool_size`` must be a power of two because ``BuddyAllocator``
+        requires it; a non-power-of-two value raises ``ValueError``.
     """
     results: dict[str, AllocatorStats] = {}
     results["buddy"] = run_workload(BuddyAllocator(pool_size), list(ops))
