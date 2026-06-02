@@ -84,6 +84,8 @@ class VM:
         self.stack.append(value)
 
     def pop(self):
+        if not self.stack:
+            raise VMError("stack underflow")
         return self.stack.pop()
 
     def run(self, chunk):
@@ -148,8 +150,9 @@ class VM:
         if b == 0:
             raise VMError("division by zero")
         if isinstance(a, int) and isinstance(b, int):
-            # int / int stays int, truncating toward zero.
-            self.push(int(a / b))
+            # int / int stays int, truncating toward zero without float
+            # conversion (preserves arbitrary precision for ints > 2^53).
+            self.push(a // b if (a < 0) == (b < 0) else -(-a // b))
         else:
             self.push(a / b)
 
@@ -159,7 +162,13 @@ class VM:
         self._require_numbers(a, b, "modulo")
         if b == 0:
             raise VMError("modulo by zero")
-        self.push(a % b)
+        if isinstance(a, int) and isinstance(b, int):
+            # C-style remainder consistent with truncating op_div, so the
+            # invariant a == (a // b) * b + (a % b) holds for negatives too.
+            q = a // b if (a < 0) == (b < 0) else -(-a // b)
+            self.push(a - q * b)
+        else:
+            self.push(a % b)
 
     def op_neg(self, frame, instr):
         a = self.pop()

@@ -100,10 +100,6 @@ class Compiler:
         if isinstance(node, P.LetStmt):
             self.compile_expr(chunk, node.value)
             chunk.emit("DEFINE", node.name)
-        elif isinstance(node, P.Assign):
-            # Assignment used as a statement still flows through expr path.
-            self.compile_expr(chunk, node)
-            chunk.emit("POP")
         elif isinstance(node, P.PrintStmt):
             self.compile_expr(chunk, node.value)
             chunk.emit("PRINT")

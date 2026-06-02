@@ -67,11 +67,6 @@ class ExprStmt(Node):
         self.expr = expr
 
 
-class Block(Node):
-    def __init__(self, statements):
-        self.statements = statements
-
-
 class Assign(Node):
     def __init__(self, name, value):
         self.name = name
